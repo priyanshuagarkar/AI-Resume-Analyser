@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Resume Analyzer</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Font -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background: #f5f7fb;
+      }
+      .glass {
+        background: #ffffff;
+        border-radius: 20px;
+      }
+    </style>
+  </head>
+
+  <body class="min-h-screen py-14 px-4">
+    <div class="max-w-5xl mx-auto">
+      <!-- HEADER -->
+      <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold text-slate-900 mb-2">
+          AI Resume Analyzer
+        </h1>
+        <p class="text-slate-600">ATS-style resume evaluation</p>
+      </div>
+
+      <!-- UPLOAD -->
+      <div class="glass shadow-lg p-10 mb-12">
+        <form
+          method="POST"
+          enctype="multipart/form-data"
+          class="space-y-6"
+          onsubmit="showLoader()"
+        >
+          <div>
+            <label class="block font-semibold mb-2">Upload Resume (PDF)</label>
+            <input
+              type="file"
+              name="resume"
+              required
+              class="block w-full text-sm file:mr-4 file:py-2 file:px-5 file:rounded-full file:border-0 file:bg-indigo-100 file:text-indigo-700"
+            />
+          </div>
+
+          <div>
+            <label class="block font-semibold mb-2">Job Description</label>
+            <textarea
+              name="job_desc"
+              required
+              placeholder="Paste job description here..."
+              class="w-full h-36 p-4 rounded-xl border focus:ring-2 focus:ring-indigo-400"
+            ></textarea>
+          </div>
+
+          <button
+            type="submit"
+            class="w-full py-4 rounded-xl text-white font-semibold bg-gradient-to-r from-indigo-500 to-purple-500"
+          >
+            Analyze Resume
+          </button>
+        </form>
+
+        <div
+          id="loader"
+          class="hidden mt-6 text-center text-indigo-600 font-semibold"
+        >
+          Analyzing resume with AI…
+        </div>
+      </div>
+
+      {% if analysis %}
+      <!-- RESULTS -->
+      <div class="glass shadow-xl p-12">
+        <!-- SCORE + PIE -->
+        <div class="grid md:grid-cols-2 gap-12 items-center mb-12">
+          <!-- LEFT: SCORE -->
+          <div class="space-y-6">
+            <div class="flex items-center gap-4">
+              <h3 class="text-lg font-semibold text-slate-700">
+                Resume Match Score
+              </h3>
+              <span class="text-4xl font-bold text-indigo-600">
+                {{ analysis.match_percentage }}%
+              </span>
+            </div>
+
+            <div class="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                class="h-3 rounded-full bg-indigo-500"
+                style="width: {{ analysis.match_percentage }}%"
+              ></div>
+            </div>
+
+            <p class="text-sm text-slate-500 max-w-md">
+              Score indicates how well your resume matches the job description
+              based on skills, keywords, and relevance used by ATS systems.
+            </p>
+          </div>
+
+          <!-- RIGHT: PIE CHART -->
+          <div class="flex justify-center">
+            <canvas id="skillChart" class="max-w-[220px]"></canvas>
+          </div>
+        </div>
+
+        <!-- SKILLS -->
+        <div class="grid md:grid-cols-2 gap-10 mb-12">
+          <div>
+            <h4 class="font-semibold mb-4">Matched Skills</h4>
+            <div class="flex flex-wrap gap-2">
+              {% for skill in analysis.matched_skills %}
+              <span
+                class="px-4 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm"
+              >
+                {{ skill }}
+              </span>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold mb-4">Missing Skills</h4>
+            <div class="flex flex-wrap gap-2">
+              {% for skill in analysis.missing_skills %}
+              <span
+                class="px-4 py-1 rounded-full bg-rose-100 text-rose-700 text-sm"
+              >
+                {{ skill }}
+              </span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- RECOMMENDATIONS -->
+        <div class="border-t pt-8 mb-10">
+          <h4 class="font-semibold mb-4">Recommendations</h4>
+          <ul class="space-y-3 text-sm text-slate-700">
+            {% for rec in analysis.recommendations %}
+            <li class="flex gap-3">
+              <span class="text-indigo-500">➤</span>{{ rec }}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <!-- DECISION -->
+        <div class="text-center">
+          <span
+            class="inline-block px-6 py-3 rounded-full text-lg font-semibold {% if analysis.should_apply == 'Yes' %} bg-emerald-100 text-emerald-700 {% elif analysis.should_apply == 'Maybe' %} bg-amber-100 text-amber-700 {% else %} bg-rose-100 text-rose-700 {% endif %}"
+          >
+            Should you apply? → {{ analysis.should_apply }}
+          </span>
+          <p class="mt-2 text-sm text-slate-500">
+            {{ analysis.decision_reason }}
+          </p>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <script>
+      function showLoader() {
+          document.getElementById("loader").classList.remove("hidden");
+      }
+
+      {% if analysis %}
+      new Chart(document.getElementById('skillChart'), {
+          type: 'doughnut',
+          data: {
+              labels: ['Matched Skills', 'Missing Skills'],
+              datasets: [{
+                  data: [
+                      {{ analysis.matched_skills | length }},
+                      {{ analysis.missing_skills | length }}
+                  ],
+                  backgroundColor: ['#22c55e', '#ef4444']
+              }]
+          },
+          options: {
+              cutout: '72%',
+              plugins: {
+                  legend: {
+                      position: 'bottom',
+                      labels: { boxWidth: 12 }
+                  }
+              }
+          }
+      });
+      {% endif %}
+    </script>
+  </body>
+</html>
